@@ -17,7 +17,7 @@ func calculateMinimumRemaining(groups []int) int {
 	return minimumRemaining
 }
 
-func process(index int, originalLine []rune, current rune, groups []int, seen int, totalSeen int, expectedTotal int, minimumRemaining int) int {
+func process(index int, originalLine []rune, current rune, groups []int, seen int, totalSeen int, expectedTotal int, minimumRemaining []int) int {
 	total := 0
 
 	if index < len(originalLine) && totalSeen < expectedTotal {
@@ -39,12 +39,10 @@ func process(index int, originalLine []rune, current rune, groups []int, seen in
 					if seen != groups[0] {
 						return 0
 					}
-					groups := groups[1:]
-					minimumRemaining = calculateMinimumRemaining(groups)
-					total += process(index+1, originalLine, next, groups, 0, totalSeen, expectedTotal, minimumRemaining)
+					total += process(index+1, originalLine, next, groups[1:], 0, totalSeen, expectedTotal, minimumRemaining[1:])
 				} else {
 					remainingSlots := len(originalLine) - (index + 1)
-					if minimumRemaining > remainingSlots {
+					if minimumRemaining[0] > remainingSlots {
 						return 0
 					}
 					total += process(index+1, originalLine, next, groups, 0, totalSeen, expectedTotal, minimumRemaining)
@@ -64,6 +62,13 @@ func process(index int, originalLine []rune, current rune, groups []int, seen in
 	return total
 }
 
+func buildMinimumRemaining(groups []int, minimumRemaining []int) []int {
+	if len(groups) == 0 {
+		return minimumRemaining
+	}
+	return buildMinimumRemaining(groups[1:], append(minimumRemaining, calculateMinimumRemaining(groups)))
+}
+
 func runProcess(channel chan int, line []rune, groups []int) {
 	fmt.Println("Running", string(line), len(line))
 
@@ -77,7 +82,9 @@ func runProcess(channel chan int, line []rune, groups []int) {
 		}
 	}
 
-	total := process(0, line, line[0], newGroups, 0, 0, addUp(groups)*5, calculateMinimumRemaining(newGroups))
+	minimumRemaining := buildMinimumRemaining(newGroups, []int{})
+
+	total := process(0, line, line[0], newGroups, 0, 0, addUp(groups)*5, minimumRemaining)
 
 	fmt.Println(string(line), ":", total)
 
@@ -126,12 +133,10 @@ func main() {
 		parts := strings.Split(line, " ")
 
 		spr := []rune(unfold(parts[0], "?"))
-		//spr := []rune(parts[0])
 		counts := parseCounts(parts[1])
 
 		go runProcess(channel, spr, counts)
 		channelCount += 1
-		//break
 	}
 	n := 0
 	for total := range channel {
