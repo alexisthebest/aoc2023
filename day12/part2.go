@@ -8,70 +8,22 @@ import (
 	"strings"
 )
 
-func counts(line []bool) []int {
-	arr := []int{}
-
-	n := 0
-	for _, c := range line {
-		if c {
-			n++
-		} else {
-			if n > 0 {
-				arr = append(arr, n)
-			}
-			n = 0
-		}
+func calculateMinimumRemaining(groups []int) int {
+	minimumRemaining := -1 // Start at -1 to account for 1 added to the end
+	for _, n := range groups {
+		// Count group of hashes plus dot separator
+		minimumRemaining += n + 1
 	}
-	if n > 0 {
-		return append(arr, n)
-	}
-	return arr
+	return minimumRemaining
 }
 
-func doesMatch(line []bool, groups []int, expectedTotalLength int) (bool, bool) {
-	m := counts(line)
-	lastIndex := len(m) - 1
-
-	if lastIndex >= 0 {
-		j := 0
-		totalLength := 0
-		valid := false
-
-		for i, currentLength := range m {
-			valid = currentLength == groups[j]
-			if i < lastIndex && !valid {
-				return false, false
-			}
-			j++
-			if j >= len(groups) {
-				j = 0
-			}
-			totalLength += currentLength
-		}
-		return true, valid && totalLength == expectedTotalLength
-	}
-	return true, false
-}
-
-func nextGroupIndex(index int, groups []int, increment int) int {
-	newIndex := index + increment
-
-	if newIndex < 0 {
-		newIndex = len(groups) - 1
-	} else if newIndex > len(groups)-1 {
-		newIndex = 0
-	}
-	return newIndex
-}
-
-func process(index int, originalLine []rune, current rune, groups []int, groupIndex int, seen int, totalSeen int, expectedTotal int) int {
+func process(index int, originalLine []rune, current rune, groups []int, seen int, totalSeen int, expectedTotal int, minimumRemaining int) int {
 	total := 0
 
 	if index < len(originalLine) && totalSeen < expectedTotal {
-		if seen > groups[groupIndex] {
+		if seen > groups[0] {
 			return 0
 		}
-
 		next := '?'
 		if index < len(originalLine)-1 {
 			next = originalLine[index+1]
@@ -79,37 +31,53 @@ func process(index int, originalLine []rune, current rune, groups []int, groupIn
 		switch current {
 		case '#':
 			{
-				total += process(index+1, originalLine, next, groups, groupIndex, seen+1, totalSeen+1, expectedTotal)
+				total += process(index+1, originalLine, next, groups, seen+1, totalSeen+1, expectedTotal, minimumRemaining)
 			}
 		case '.':
 			{
 				if seen > 0 {
-					if seen != groups[groupIndex] {
+					if seen != groups[0] {
 						return 0
 					}
-					groupIndex = nextGroupIndex(groupIndex, groups, 1)
+					groups := groups[1:]
+					minimumRemaining = calculateMinimumRemaining(groups)
+					total += process(index+1, originalLine, next, groups, 0, totalSeen, expectedTotal, minimumRemaining)
+				} else {
+					remainingSlots := len(originalLine) - (index + 1)
+					if minimumRemaining > remainingSlots {
+						return 0
+					}
+					total += process(index+1, originalLine, next, groups, 0, totalSeen, expectedTotal, minimumRemaining)
 				}
-				total += process(index+1, originalLine, next, groups, groupIndex, 0, totalSeen, expectedTotal)
 			}
 		default:
 			{
-				total += process(index, originalLine, '#', groups, groupIndex, seen, totalSeen, expectedTotal)
-				total += process(index, originalLine, '.', groups, groupIndex, seen, totalSeen, expectedTotal)
+				total += process(index, originalLine, '#', groups, seen, totalSeen, expectedTotal, minimumRemaining)
+				total += process(index, originalLine, '.', groups, seen, totalSeen, expectedTotal, minimumRemaining)
 			}
 		}
 	} else {
-		if seen == groups[groupIndex] && totalSeen == expectedTotal {
+		if seen == groups[0] && totalSeen == expectedTotal {
 			return total + 1
 		}
 	}
-
 	return total
 }
 
 func runProcess(channel chan int, line []rune, groups []int) {
-	fmt.Println("Running", string(line), counts, len(line))
+	fmt.Println("Running", string(line), len(line))
 
-	total := process(0, line, line[0], groups, 0, 0, 0, addUp(groups)*5)
+	newGroups := make([]int, len(groups)*5)
+
+	j := 0
+	for j < len(newGroups) {
+		for _, n := range groups {
+			newGroups[j] = n
+			j++
+		}
+	}
+
+	total := process(0, line, line[0], newGroups, 0, 0, addUp(groups)*5, calculateMinimumRemaining(newGroups))
 
 	fmt.Println(string(line), ":", total)
 
